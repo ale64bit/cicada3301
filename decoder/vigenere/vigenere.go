@@ -8,11 +8,6 @@ import (
 	"cicada/gematria"
 )
 
-type vigenere struct {
-	keyword []rune
-	skips   []int
-}
-
 func New(keyword string, skips []int) decoder.Decoder {
 	name := fmt.Sprintf("vigenere(%q)", keyword)
 	ks := []rune(keyword)

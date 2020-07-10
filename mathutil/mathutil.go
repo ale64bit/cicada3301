@@ -4,6 +4,18 @@ var (
 	primes []int
 )
 
+func Pow(n, e int) int {
+	switch {
+	case e <= 0:
+		return 1
+	case e%2 == 0:
+		x := Pow(n, e>>1)
+		return x * x
+	default:
+		return n * Pow(n, e-1)
+	}
+}
+
 func ModPow(n, e, m int) int {
 	switch {
 	case e <= 0:
