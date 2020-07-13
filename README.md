@@ -27,5 +27,5 @@ Example output for running the command `go run bin/search/main.go` under Linux:
 
 Additionally, you can pass the following flags:
 * `-prefix_len`: specify the length of the prefix to try to decode from each unsolved section. Longer prefixes result in slower searches.
-* `-selected_sessions`: a comma-separated list of the unsolved sections to try to decode. If unspecified, all unsolved sections are tried.
+* `-selected_sections`: a comma-separated list of the unsolved sections to try to decode. If unspecified, all unsolved sections are tried.
 * `-match_score`: the minimum score that is considered a match (i.e. successfully decoded). Scores range from 0 to 1.

@@ -1,7 +1,8 @@
 package mathutil
 
 var (
-	primes []int
+	primes     []int
+	primeIndex = map[int]int{}
 )
 
 func Pow(n, e int) int {
@@ -91,6 +92,14 @@ func PrimeAt(k int) int {
 	return primes[k]
 }
 
+func PrimeIndex(p int) int {
+	idx, ok := primeIndex[p]
+	if !ok {
+		return -1
+	}
+	return idx
+}
+
 func Primes(n int) []int {
 	if n < 3 {
 		return []int{2}
@@ -119,4 +128,7 @@ func Primes(n int) []int {
 
 func init() {
 	primes = Primes(1000000)
+	for i, p := range primes {
+		primeIndex[p] = i
+	}
 }

@@ -1,13 +1,20 @@
 package gematria
 
-type runeInfo struct {
+import "strings"
+
+type graphInfo struct {
 	letter string
 	index  int
 	value  int
 }
 
+type encoding struct {
+	from string
+	to   string
+}
+
 var (
-	runeMap = map[rune]runeInfo{
+	runeMap = map[rune]graphInfo{
 		'ᚠ': {"F", 0, 2},
 		'ᚢ': {"U", 1, 3},
 		'ᚦ': {"TH", 2, 5},
@@ -38,6 +45,86 @@ var (
 		'ᛡ': {"IO", 27, 107},
 		'ᛠ': {"EA", 28, 109},
 	}
+
+	punctuationMap = map[rune]graphInfo{
+		'-': {" ", 0, 1},
+		',': {", ", 1, 2},
+		'<': {"<", 2, 3},
+		'>': {">", 3, 3},
+		'.': {".", 4, 4},
+		'~': {"~", 5, 5},
+		'*': {"*", 6, 10},
+		'!': {"!", 7, 11},
+		'+': {"+", 8, 13},
+		'#': {"#", 9, 23},
+	}
+
+	controlMap = map[rune]string{
+		'[':  "\033[31m",
+		']':  "\033[39m",
+		'\'': "'",
+		'"':  `"`,
+		'0':  "0",
+		'1':  "1",
+		'2':  "2",
+		'3':  "3",
+		'4':  "4",
+		'5':  "5",
+		'6':  "6",
+		'7':  "7",
+		'8':  "8",
+		'9':  "9",
+	}
+
+	encodings = []encoding{
+		// trigraphs
+		encoding{"ING", "ᛝ"},
+		// digraphs
+		encoding{"AE", "ᚫ"},
+		encoding{"EA", "ᛠ"},
+		encoding{"EO", "ᛇ"},
+		encoding{"IO", "ᛡ"},
+		encoding{"OE", "ᛟ"},
+		encoding{"NG", "ᛝ"},
+		encoding{"TH", "ᚦ"},
+		// single
+		encoding{"A", "ᚪ"},
+		encoding{"B", "ᛒ"},
+		encoding{"C", "ᚳ"},
+		encoding{"D", "ᛞ"},
+		encoding{"E", "ᛖ"},
+		encoding{"F", "ᚠ"},
+		encoding{"G", "ᚷ"},
+		encoding{"H", "ᚻ"},
+		encoding{"I", "ᛁ"},
+		encoding{"J", "ᛄ"},
+		encoding{"K", "ᚳ"},
+		encoding{"L", "ᛚ"},
+		encoding{"M", "ᛗ"},
+		encoding{"N", "ᚾ"},
+		encoding{"O", "ᚩ"},
+		encoding{"P", "ᛈ"},
+		encoding{"Q", "ᚳᚹ"},
+		encoding{"R", "ᚱ"},
+		encoding{"S", "ᛋ"},
+		encoding{"T", "ᛏ"},
+		encoding{"U", "ᚢ"},
+		encoding{"V", "ᚢ"},
+		encoding{"W", "ᚹ"},
+		encoding{"X", "ᛉ"},
+		encoding{"Y", "ᚣ"},
+		// punctuation
+		encoding{" ", "-"},
+		encoding{",", ","},
+		encoding{"<", "<"},
+		encoding{">", ">"},
+		encoding{".", "."},
+		encoding{"~", "~"},
+		encoding{"*", "*"},
+		encoding{"!", "!"},
+		encoding{"+", "+"},
+		encoding{"#", "#"},
+	}
 )
 
 func Len() int {
@@ -47,6 +134,15 @@ func Len() int {
 func IsValidRune(r rune) bool {
 	_, ok := runeMap[r]
 	return ok
+}
+
+func IsValidPunctuation(r rune) bool {
+	_, ok := punctuationMap[r]
+	return ok
+}
+
+func IsValid(r rune) bool {
+	return IsValidRune(r) || IsValidPunctuation(r)
 }
 
 func LetterOfRune(r rune) string {
@@ -94,17 +190,117 @@ func RuneOfLetter(s string) rune {
 func RuneCount(s string) int {
 	ret := 0
 	for _, r := range s {
-		if _, ok := runeMap[r]; ok {
+		if IsValidRune(r) {
 			ret++
 		}
 	}
 	return ret
 }
 
-func Encode(s string) string {
+func FilterRunes(s string) string {
+	ret := ""
+	for _, r := range s {
+		if IsValidRune(r) {
+			ret += string(r)
+		}
+	}
+	return ret
+}
+
+func WordStream(s string) []string {
+	var ret []string
+	cur := ""
+	for _, r := range s {
+		if IsValidRune(r) {
+			cur += string(r)
+		} else if IsValidPunctuation(r) {
+			if len(cur) > 0 {
+				ret = append(ret, cur)
+				cur = ""
+			}
+		}
+	}
+	if len(cur) > 0 {
+		ret = append(ret, cur)
+	}
+	return ret
+}
+
+func RuneStream(s string) []rune {
+	var ret []rune
+	for _, r := range s {
+		if IsValidRune(r) {
+			ret = append(ret, r)
+		}
+	}
+	return ret
+}
+
+func ValueStream(s string) []int {
+	var ret []int
+	for _, r := range s {
+		if IsValidRune(r) {
+			ret = append(ret, ValueOfRune(r))
+		}
+	}
+	return ret
+}
+
+func IndexStream(s string) []int {
+	var ret []int
+	for _, r := range s {
+		if IsValidRune(r) {
+			ret = append(ret, IndexOfRune(r))
+		}
+	}
+	return ret
+}
+
+func EncodeLiteral(s string) string {
 	ret := ""
 	for _, r := range s {
 		ret += string(RuneOfLetter(string(r)))
 	}
 	return ret
+}
+
+func Encode(s string) string {
+	for _, e := range encodings {
+		s = strings.ReplaceAll(s, e.from, e.to)
+	}
+	return s
+}
+
+type MapFunc = func(rune) string
+
+func MapRunes(s string, f MapFunc) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case IsValidRune(r):
+			b.WriteString(f(r))
+		case IsValidPunctuation(r):
+			p := punctuationMap[r]
+			b.WriteString(p.letter)
+			if p.value >= 4 {
+				b.WriteString("\n")
+			}
+		default:
+			b.WriteString(controlMap[r])
+		}
+	}
+	return b.String()
+}
+
+func MapRunesAndPunctuation(s string, f MapFunc) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case IsValid(r):
+			b.WriteString(f(r))
+		default:
+			b.WriteString(controlMap[r])
+		}
+	}
+	return b.String()
 }

@@ -1,9 +1,45 @@
 package dict
 
-import "strings"
+import (
+	"math"
+	"strings"
+)
 
 func Exists(s string) bool {
 	return words[s]
+}
+
+func AllWords() []string {
+	var ret []string
+	for k := range words {
+		ret = append(ret, k)
+	}
+	return ret
+}
+
+func Score(msg string) float64 {
+	ws := strings.Fields(strings.Map(func(r rune) rune {
+		switch {
+		case 'A' <= r && r <= 'Z':
+			return r
+		case r == ' ', r == ',', r == '<', r == '>', r == '.', r == '~', r == '*', r == '!', r == '+', r == '#', r == '"', r == '\'':
+			return ' '
+		default:
+			return -1
+		}
+	}, msg))
+	if len(ws) == 0 {
+		return 0.0
+	}
+	total := 0
+	score := 0.0
+	for _, word := range ws {
+		total += len(word)
+		if Exists(word) {
+			score += math.Pow(float64(len(word)), 1.0)
+		}
+	}
+	return score / float64(total)
 }
 
 func buildVariants(s string) []string {
@@ -23,6 +59,12 @@ func buildVariants(s string) []string {
 }
 
 func init() {
+	for word := range smallWords {
+		variants := buildVariants(word)
+		for _, variant := range variants {
+			words[variant] = true
+		}
+	}
 	for word := range baseWords {
 		if len(word) < 4 {
 			continue
@@ -35,7 +77,44 @@ func init() {
 }
 
 var (
-	words     = map[string]bool{}
+	words      = map[string]bool{}
+	smallWords = map[string]bool{
+		"ALL": true,
+		"AND": true,
+		"AM":  true,
+		"AN":  true,
+		"A":   true,
+		"BE":  true,
+		"CAN": true,
+		"DO":  true,
+		"FOR": true,
+		"HER": true,
+		"HE":  true,
+		"HIS": true,
+		"IN":  true,
+		"IS":  true,
+		"I":   true,
+		"IT":  true,
+		"KEY": true,
+		"LED": true,
+		"ME":  true,
+		"MY":  true,
+		"NO":  true,
+		"NOT": true,
+		"NOW": true,
+		"OF":  true,
+		"OR":  true,
+		"OUR": true,
+		"OUT": true,
+		"OWN": true,
+		"SHE": true,
+		"THE": true,
+		"TO":  true,
+		"WE":  true,
+		"WEB": true,
+		"WHO": true,
+		"YOU": true,
+	}
 	baseWords = map[string]bool{
 		// liber-primus vocabulary
 		"adherence":      true,
