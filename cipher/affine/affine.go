@@ -36,7 +36,7 @@ func (c *affine) Decode(s string) string {
 	f := func(r rune) string {
 		y := gematria.IndexOfRune(r)
 		x := (c.aInv * (y - c.b + m)) % m
-		return gematria.LetterOfIndex(x)
+		return string(gematria.RuneOfIndex(x))
 	}
 	return gematria.MapRunes(s, f)
 }

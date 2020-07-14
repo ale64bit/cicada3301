@@ -9,8 +9,12 @@ import (
 
 	"cicada/cipher"
 	"cicada/cipher/affine"
-	"cicada/cipher/direct"
+	"cicada/cipher/caesar"
+	"cicada/cipher/cat"
 	"cicada/cipher/experimental"
+	"cicada/cipher/fskip"
+	"cicada/cipher/identity"
+	"cicada/cipher/prime"
 	"cicada/cipher/vigenere"
 	"cicada/data"
 	"cicada/dict"
@@ -26,130 +30,98 @@ var (
 
 func buildSkipSets(msg string) [][]int {
 	ret := [][]int{}
-	// for k := 0; k < gematria.Len(); k++ {
 	for k := 0; k < 1; k++ {
 		var loc []int
 		index := 0
 		for _, r := range msg {
-			id := gematria.IndexOfRune(r)
-			if id == -1 {
+			if !gematria.IsValidRune(r) {
 				continue
 			}
-			if id == k {
+			if id := gematria.IndexOfRune(r); id == k {
 				loc = append(loc, index)
 			}
 			index++
 		}
 		n := len(loc)
 		for mask := 0; mask < (1 << n); mask++ {
-			skips := []int{}
+			var skips []int
 			for i := 0; i < n; i++ {
 				if (mask & (1 << i)) != 0 {
 					skips = append(skips, loc[i])
 				}
 			}
-			if len(skips) > 0 {
-				ret = append(ret, skips)
-			}
+			ret = append(ret, skips)
 		}
 	}
 	return ret
 }
 
-func buildExperimentalCiphers(skipSets [][]int, ciphers chan<- cipher.Cipher) {
+func buildExperimentalCiphers(ciphers chan<- cipher.Cipher) {
 	m := gematria.Len()
-	ciphers <- direct.New()
-	for offset := 0; offset < m; offset++ {
-		for _, ss := range skipSets {
-			// Simple
-			ciphers <- experimental.NewStateless("D(x) = (VR(x) + off) mod 29", func(i int, r rune) int {
-				return (gematria.ValueOfRune(r) + offset) % m
-			}, ss)
-			// ===========================================================================================
-			// Mu-based
-			ciphers <- experimental.NewStateless("D(X) = (IR(x) - mu(x) + off) mod 29", func(i int, r rune) int {
-				return (m*m*m*m + gematria.IndexOfRune(r) - mathutil.Mu(i) + offset) % m
-			}, ss)
-			ciphers <- experimental.NewStateless("D(x) = (VR(x) - mu(x) + off) mod 29", func(i int, r rune) int {
-				return (m*m*m*m + gematria.ValueOfRune(r) - mathutil.Mu(i) + offset) % m
-			}, ss)
-			// ===========================================================================================
-			// Phi-based
-			ciphers <- experimental.NewStateless("D(x) = (IR(x) - phi(x) + off) mod 29", func(i int, r rune) int {
-				return (m*m*m*m + gematria.IndexOfRune(r) - mathutil.Phi(i) + offset) % m
-			}, ss)
-			ciphers <- experimental.NewStateless("D(x) = (VR(x) - phi(x) + off) mod 29", func(i int, r rune) int {
-				return (m*m*m*m + gematria.ValueOfRune(r) - mathutil.Phi(i) + offset) % m
-			}, ss)
-			ciphers <- experimental.NewStateless("D(x) = (IR(x) - phi(primes(x)) + off) mod 29", func(i int, r rune) int {
-				return (m*m*m*m + gematria.IndexOfRune(r) - mathutil.Phi(mathutil.PrimeAt(i)) + offset) % m
-			}, ss)
-			ciphers <- experimental.NewStateless("D(x) = (VR(x) - phi(primes(x)) + off) mod 29", func(i int, r rune) int {
-				return (m*m*m*m + gematria.ValueOfRune(r) - mathutil.Phi(mathutil.PrimeAt(i)) + offset) % m
-			}, ss)
-			// ===========================================================================================
-			// Stateful
-			for _, base := range []int{2, 8, 10, 29, 59, 60} {
-				base := base
-				ciphers <- experimental.New("B???", func(i int, r rune, state int) (int, int) {
-					newState := (m*m + state*base - gematria.IndexOfRune(r)) % m
-					return (m*m*m*m + state + offset) % m, newState
-				}, ss)
-				ciphers <- experimental.New("B???", func(i int, r rune, state int) (int, int) {
-					newState := (m*m + state*base - gematria.ValueOfRune(r)) % m
-					return (m*m*m*m + state + offset) % m, newState
-				}, ss)
+	z := mathutil.Pow(m, 6)
+	ciphers <- identity.New()
+	base := []cipher.Cipher{
+		experimental.NewStateless("rev", func(i int, r rune) int { return 28 - gematria.IndexOfRune(r) }),
+		experimental.NewStateless("IR", func(_ int, r rune) int { return (z - gematria.IndexOfRune(r)) % m }),
+		experimental.NewStateless("VR", func(_ int, r rune) int { return (z - gematria.ValueOfRune(r)) % m }),
+		prime.New(),
+		experimental.NewStateless("muIdx", func(i int, r rune) int { return (z - mathutil.Mu(i)) % m }),
+		experimental.NewStateless("muIR", func(i int, r rune) int { return (z - mathutil.Mu(gematria.IndexOfRune(r))) % m }),
+		experimental.NewStateless("muVR", func(i int, r rune) int { return (z - mathutil.Mu(gematria.ValueOfRune(r))) % m }),
+		experimental.NewStateless("phiIdx", func(i int, r rune) int { return (z - mathutil.Phi(i)) % m }),
+		experimental.NewStateless("phiIR", func(i int, r rune) int { return (z - mathutil.Phi(gematria.IndexOfRune(r))) % m }),
+		experimental.NewStateless("phiVR", func(i int, r rune) int { return (z - mathutil.Phi(gematria.ValueOfRune(r))) % m }),
+		experimental.NewStateless("pinv", func(i int, r rune) int {
+			return (gematria.IndexOfRune(r) * mathutil.ModPow(mathutil.PrimeAt(i), m-2, m)) % m
+		}),
+		experimental.New("st_ixor", func(i int, r rune, state int) (int, int) { return state % m, (state ^ gematria.IndexOfRune(r)) % m }),
+		experimental.New("st_vxor", func(i int, r rune, state int) (int, int) { return state % m, (state ^ gematria.ValueOfRune(r)) % m }),
+		experimental.New("st_b10", func(i int, r rune, state int) (int, int) {
+			return state % m, (z + state*10 - gematria.IndexOfRune(r)) % m
+		}),
+		experimental.New("st_b29", func(i int, r rune, state int) (int, int) {
+			return state % m, (z + state*29 - gematria.IndexOfRune(r)) % m
+		}),
+		experimental.New("st_b60", func(i int, r rune, state int) (int, int) {
+			return state % m, (z + state*60 - gematria.IndexOfRune(r)) % m
+		}),
+		experimental.New("st_b1033", func(i int, r rune, state int) (int, int) {
+			return state % m, (z + state*1033 - gematria.IndexOfRune(r)) % m
+		}),
+		experimental.New("st_b3301", func(i int, r rune, state int) (int, int) {
+			return state % m, (z + state*3301 - gematria.IndexOfRune(r)) % m
+		}),
+	}
+	for shift := 0; shift < m; shift++ {
+		for mask := 1; mask < (1 << len(base)); mask++ {
+			var cs []cipher.Cipher
+			for i := 0; i < len(base); i++ {
+				if (mask & (1 << i)) != 0 {
+					cs = append(cs, base[i])
+				}
 			}
-			ciphers <- experimental.New("P???", func(i int, r rune, state int) (int, int) {
-				newState := (m*m + state - gematria.ValueOfRune(r)) % m
-				return (m*m*m*m + state + offset) % m, newState
-			}, ss)
-			ciphers <- experimental.New("P???", func(i int, r rune, state int) (int, int) {
-				newState := (m*m + state - gematria.IndexOfRune(r) - mathutil.PrimeAt(i)) % m
-				return (m*m*m*m + state + offset) % m, newState
-			}, ss)
-			ciphers <- experimental.New("P???", func(i int, r rune, state int) (int, int) {
-				newState := (m*m + state + gematria.ValueOfRune(r) - mathutil.PrimeAt(i)) % m
-				return (m*m*m*m + state + offset) % m, newState
-			}, ss)
-			ciphers <- experimental.New("P???", func(i int, r rune, state int) (int, int) {
-				newState := (m*m + state - gematria.ValueOfRune(r)*mathutil.PrimeAt(i)) % m
-				return (m*m*m*m + state + offset) % m, newState
-			}, ss)
-			// ===========================================================================================
-			// Others
-			ciphers <- experimental.NewStateless("D(x) = (IR(x) - primes(x) + off) mod 29", func(i int, r rune) int {
-				return (m*m*m*m + gematria.IndexOfRune(r) - mathutil.PrimeAt(i) + offset) % m
-			}, ss)
-			ciphers <- experimental.NewStateless("D(x) = (VR(x) - primes(x) + off) mod 20", func(i int, r rune) int {
-				return (m*m*m*m + gematria.ValueOfRune(r) - mathutil.PrimeAt(i) + offset) % m
-			}, ss)
-			// ===========================================================================================
-			// Others
-			ciphers <- experimental.NewStateless("D(x) = ((29-IR(x)-1) * 60^x + off) mod 29", func(i int, r rune) int {
-				return (m*m*m*m + (m-gematria.IndexOfRune(r)-1)*mathutil.ModPow(60, i, m) + offset) % m
-			}, ss)
-			ciphers <- experimental.NewStateless("D(x) = (VR(x) * 60^x + off) mod 29", func(i int, r rune) int {
-				return (m*m*m*m + gematria.ValueOfRune(r)*mathutil.ModPow(60, i, m) + offset) % m
-			}, ss)
+			cs = append(cs, caesar.New(shift))
+			ciphers <- cat.New(cs...)
 		}
 	}
 }
 
-func buildAffineCiphers(skipSets [][]int, ciphers chan<- cipher.Cipher) {
+func buildAffineCiphers(ciphers chan<- cipher.Cipher) {
 	m := gematria.Len()
 	for a := 0; a < m; a++ {
 		if !mathutil.Coprime(a, m) {
 			continue
 		}
 		for b := 0; b < m; b++ {
-			ciphers <- affine.New(a, b)
+			for shift := 0; shift < m; shift++ {
+				ciphers <- cat.New(affine.New(a, b), caesar.New(shift))
+			}
 		}
 	}
 }
 
-func buildVigenereCiphers(skipSets [][]int, ciphers chan<- cipher.Cipher) {
-	// m := gematria.Len()
+func buildVigenereCiphers(ciphers chan<- cipher.Cipher) {
+	m := gematria.Len()
 	keywords := []string{
 		"ADHERENCE",
 		"ADHERE",
@@ -157,6 +129,7 @@ func buildVigenereCiphers(skipSets [][]int, ciphers chan<- cipher.Cipher) {
 		"AFFINE",
 		"AMASS",
 		"ANALOG",
+		"ANCIENT",
 		"BEHAVIORS",
 		"BUFFERS",
 		"CABAL",
@@ -168,6 +141,7 @@ func buildVigenereCiphers(skipSets [][]int, ciphers chan<- cipher.Cipher) {
 		"COMMAND",
 		"CONSUME",
 		"CONSUMPTION",
+		"CROSSROAD",
 		"DECEPTION",
 		"DIVINITY",
 		"DOGMA",
@@ -207,50 +181,35 @@ func buildVigenereCiphers(skipSets [][]int, ciphers chan<- cipher.Cipher) {
 		"TRUTH",
 		"UNREASONABLE",
 		"VOID",
+		"WAY",
 		"YOUR",
 		"YOURSELF",
 	}
-	// for mask := 1; mask < (1 << len(keywords)); mask++ {
-	// 	for _, ss := range skipSets {
-	// 		for offset := 0; offset < 29; offset++ {
-	// 			ks := []string{}
-	// 			for i := 0; i < len(keywords); i++ {
-	// 				if (mask & (1 << i)) != 0 {
-	// 					ks = append(ks, keywords[i])
-	// 				}
-	// 			}
-	// 			ciphers <- vigenere.New(ks, offset, ss)
-	// 		}
-	// 	}
-	// }
-
+	for _, keyword := range keywords {
+		for _, r := range keyword {
+			for shift := 0; shift < m; shift++ {
+				ciphers <- cat.New(vigenere.New([]string{gematria.Encode(strings.ReplaceAll(keyword, string(r), "F"))}), caesar.New(shift))
+			}
+		}
+	}
 	for i := 0; i < len(keywords); i++ {
 		for j := i + 1; j < len(keywords); j++ {
 			for k := j + 1; k < len(keywords); k++ {
 				k1, k2, k3 := keywords[i], keywords[j], keywords[k]
-				for _, ss := range skipSets {
-					ciphers <- vigenere.New([]string{gematria.Encode(k1)}, ss)
-					ciphers <- vigenere.New([]string{gematria.Encode(k1), gematria.Encode(k2)}, ss)
-					ciphers <- vigenere.New([]string{gematria.Encode(k1), gematria.Encode(k2), gematria.Encode(k3)}, ss)
+				for shift := 0; shift < m; shift++ {
+					ciphers <- cat.New(vigenere.New([]string{gematria.Encode(k1)}), caesar.New(shift))
+					ciphers <- cat.New(vigenere.New([]string{gematria.Encode(k1), gematria.Encode(k2)}), caesar.New(shift))
+					ciphers <- cat.New(vigenere.New([]string{gematria.Encode(k1), gematria.Encode(k2), gematria.Encode(k3)}), caesar.New(shift))
 				}
-			}
-		}
-	}
-	for _, keyword := range keywords {
-		for _, r := range keyword {
-			for _, ss := range skipSets {
-				ciphers <- vigenere.New([]string{gematria.Encode(strings.ReplaceAll(keyword, string(r), "F"))}, ss)
 			}
 		}
 	}
 }
 
 func buildCandidateCiphers(ciphers chan<- cipher.Cipher) {
-	// skipSets := buildSkipSets(msg)
-	skipSets := [][]int{[]int{}}
-	buildExperimentalCiphers(skipSets, ciphers)
-	buildAffineCiphers(skipSets, ciphers)
-	buildVigenereCiphers(skipSets, ciphers)
+	buildExperimentalCiphers(ciphers)
+	buildAffineCiphers(ciphers)
+	buildVigenereCiphers(ciphers)
 	close(ciphers)
 }
 
@@ -273,16 +232,23 @@ func revRunes(s string) string {
 }
 
 func eval(sections []data.Section, ciphers <-chan cipher.Cipher) {
+	bestScore := 0.35
+	var skipSets [][][]int
+	for _, section := range sections {
+		msg := section.Text()[:*prefixLen]
+		skipSets = append(skipSets, buildSkipSets(msg))
+	}
 	for dec := range ciphers {
-		for _, section := range sections {
+		for i, section := range sections {
 			msg := section.Text()[:*prefixLen]
-			if section.ID == "unsolved3" {
-				msg = section.Text()[100 : 100+*prefixLen]
-			}
-			output := dec.Decode(msg)
-			score := dict.Score(output)
-			if score >= *matchScore {
-				fmt.Printf("\033[32mid=%s score=%.3f cipher=%s\n%s(...)\n\n\033[39m", section.ID, score, dec.ID(), output)
+			for _, ss := range skipSets[i] {
+				c := cat.New(dec, fskip.New(ss...))
+				plainText := gematria.Decode(c.Decode(msg))
+				score := dict.Score(plainText)
+				if score >= *matchScore || score > bestScore {
+					fmt.Printf("\033[32mid=%s score=%.3f cipher=%s\n%s(...)\n\n\033[39m", section.ID, score, c.ID(), plainText)
+					bestScore = score
+				}
 			}
 		}
 	}
@@ -305,7 +271,9 @@ func main() {
 		data.Unsolved3,
 		data.Unsolved4,
 		data.Unsolved5,
-		data.Unsolved6,
+		data.Unsolved6Prefix,
+		data.Unsolved6Body,
+		data.Unsolved6Suffix,
 		data.Unsolved7,
 	}
 

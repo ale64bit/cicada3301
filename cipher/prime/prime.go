@@ -1,4 +1,4 @@
-package totient
+package prime
 
 import (
 	"cicada/cipher"
@@ -6,25 +6,25 @@ import (
 	"cicada/mathutil"
 )
 
-type totient struct{}
+type prime struct{}
 
-func New(skips []int) cipher.Cipher {
-	return &totient{}
+func New() cipher.Cipher {
+	return &prime{}
 }
 
-func (c *totient) ID() string { return "totient()" }
+func (c *prime) ID() string { return "prime()" }
 
-func (c *totient) Encode(string) string {
+func (c *prime) Encode(string) string {
 	panic("TODO: not implemented")
 }
 
-func (c *totient) Decode(s string) string {
+func (c *prime) Decode(s string) string {
 	m := gematria.Len()
 	index := 0
 	f := func(r rune) string {
 		defer func() { index++ }()
 		y := gematria.IndexOfRune(r)
-		x := (y - (mathutil.PrimeAt(index)%m - 1) + m) % m
+		x := (y - mathutil.PrimeAt(index)%m + m) % m
 		return string(gematria.RuneOfIndex(x))
 	}
 	return gematria.MapRunes(s, f)

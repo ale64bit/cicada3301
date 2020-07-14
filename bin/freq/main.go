@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"sort"
+	"strings"
 
 	"cicada/data"
 	"cicada/gematria"
@@ -90,6 +91,33 @@ func IOC(section data.Section) {
 	fmt.Println()
 }
 
+func lineByLine(section data.Section) {
+	fmt.Printf("\t# line-by=line:\n")
+	for _, page := range section.Pages {
+		lines := strings.Split(page, "\n")
+		for _, line := range lines {
+			n := 0
+			sum := 0
+			var values []int
+			for _, r := range line {
+				if gematria.IsValidRune(r) {
+					x := gematria.IndexOfRune(r)
+					n++
+					sum += x
+					values = append(values, x)
+				}
+			}
+			fmt.Printf("\t\tn=%2d sum=%3d [ ", n, sum)
+			for _, v := range values {
+				fmt.Printf("%2d ", v)
+			}
+			fmt.Println("]")
+		}
+		fmt.Println()
+	}
+	fmt.Println()
+}
+
 func analyze(section data.Section) {
 
 	n := gematria.RuneCount(section.Text())
@@ -97,12 +125,21 @@ func analyze(section data.Section) {
 
 	graphFreq(section)
 	IOC(section)
+	lineByLine(section)
 
 	fmt.Println()
 }
 
 func main() {
 	flag.Parse()
+	selected := map[string]bool{}
+	for _, id := range flag.Args() {
+		if len(id) == 0 {
+			continue
+		}
+		selected[id] = true
+	}
+
 	sections := []data.Section{
 		data.Warning,
 		data.Welcome,
@@ -124,6 +161,8 @@ func main() {
 	}
 
 	for _, section := range sections {
-		analyze(section)
+		if len(selected) == 0 || selected[section.ID] {
+			analyze(section)
+		}
 	}
 }

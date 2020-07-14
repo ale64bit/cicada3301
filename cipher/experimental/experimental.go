@@ -8,24 +8,23 @@ import (
 )
 
 type experimental struct {
-	id    string
-	f     func(int, rune, int) (int, int)
-	skips []int
+	id string
+	f  func(int, rune, int) (int, int)
 }
 
-func New(id string, f func(int, rune, int) (int, int), skips []int) cipher.Cipher {
-	return &experimental{id, f, skips}
+func New(id string, f func(int, rune, int) (int, int)) cipher.Cipher {
+	return &experimental{id, f}
 }
 
-func NewStateless(id string, f func(int, rune) int, skips []int) cipher.Cipher {
+func NewStateless(id string, f func(int, rune) int) cipher.Cipher {
 	ff := func(i int, r rune, _ int) (int, int) {
 		return f(i, r), 0
 	}
-	return New(id, ff, skips)
+	return New(id, ff)
 }
 
 func (c *experimental) ID() string {
-	return fmt.Sprintf("experimental(%s, skips=%v)", c.id, c.skips)
+	return fmt.Sprintf("experimental(%s)", c.id)
 }
 
 func (c *experimental) Encode(msg string) string {
@@ -38,7 +37,7 @@ func (c *experimental) Decode(msg string) string {
 		defer func() { index++ }()
 		x, nextState := c.f(index, r, state)
 		state = nextState
-		return gematria.LetterOfIndex(x)
+		return string(gematria.RuneOfIndex(x))
 	}
-	return cipher.MapRunesWithSkips(msg, f, c.skips)
+	return gematria.MapRunes(msg, f)
 }

@@ -154,11 +154,14 @@ func LetterOfRune(r rune) string {
 }
 
 func ValueOfRune(r rune) int {
-	info, ok := runeMap[r]
-	if !ok {
+	switch {
+	case IsValidRune(r):
+		return runeMap[r].value
+	case IsValidPunctuation(r):
+		return punctuationMap[r].value
+	default:
 		return -1
 	}
-	return info.value
 }
 
 func IndexOfRune(r rune) int {
@@ -187,6 +190,15 @@ func RuneOfLetter(s string) rune {
 	return '?'
 }
 
+func RuneOfIndex(i int) rune {
+	for k, v := range runeMap {
+		if v.index == i {
+			return k
+		}
+	}
+	return '?'
+}
+
 func RuneCount(s string) int {
 	ret := 0
 	for _, r := range s {
@@ -198,30 +210,30 @@ func RuneCount(s string) int {
 }
 
 func FilterRunes(s string) string {
-	ret := ""
+	var b strings.Builder
 	for _, r := range s {
 		if IsValidRune(r) {
-			ret += string(r)
+			b.WriteRune(r)
 		}
 	}
-	return ret
+	return b.String()
 }
 
 func WordStream(s string) []string {
 	var ret []string
-	cur := ""
+	var cur strings.Builder
 	for _, r := range s {
 		if IsValidRune(r) {
-			cur += string(r)
+			cur.WriteRune(r)
 		} else if IsValidPunctuation(r) {
-			if len(cur) > 0 {
-				ret = append(ret, cur)
-				cur = ""
+			if cur.Len() > 0 {
+				ret = append(ret, cur.String())
+				cur.Reset()
 			}
 		}
 	}
-	if len(cur) > 0 {
-		ret = append(ret, cur)
+	if cur.Len() > 0 {
+		ret = append(ret, cur.String())
 	}
 	return ret
 }
@@ -256,12 +268,33 @@ func IndexStream(s string) []int {
 	return ret
 }
 
-func EncodeLiteral(s string) string {
-	ret := ""
+func Decode(s string) string {
+	var b strings.Builder
 	for _, r := range s {
-		ret += string(RuneOfLetter(string(r)))
+		switch {
+		case IsValidRune(r):
+			b.WriteString(runeMap[r].letter)
+		case IsValidPunctuation(r):
+			p := punctuationMap[r]
+			b.WriteString(p.letter)
+			if p.value >= 4 {
+				b.WriteString("\n")
+			}
+		case r == 'F':
+			b.WriteRune('F')
+		default:
+			b.WriteString(controlMap[r])
+		}
 	}
-	return ret
+	return b.String()
+}
+
+func EncodeLiteral(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		b.WriteRune(RuneOfLetter(string(r)))
+	}
+	return b.String()
 }
 
 func Encode(s string) string {
@@ -279,14 +312,8 @@ func MapRunes(s string, f MapFunc) string {
 		switch {
 		case IsValidRune(r):
 			b.WriteString(f(r))
-		case IsValidPunctuation(r):
-			p := punctuationMap[r]
-			b.WriteString(p.letter)
-			if p.value >= 4 {
-				b.WriteString("\n")
-			}
 		default:
-			b.WriteString(controlMap[r])
+			b.WriteRune(r)
 		}
 	}
 	return b.String()
@@ -299,7 +326,7 @@ func MapRunesAndPunctuation(s string, f MapFunc) string {
 		case IsValid(r):
 			b.WriteString(f(r))
 		default:
-			b.WriteString(controlMap[r])
+			b.WriteRune(r)
 		}
 	}
 	return b.String()

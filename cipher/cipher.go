@@ -1,8 +1,6 @@
 package cipher
 
 import (
-	"fmt"
-
 	"cicada/gematria"
 )
 
@@ -21,7 +19,7 @@ func MapRunesWithSkips(s string, f gematria.MapFunc, skips []int) string {
 	ff := func(r rune) string {
 		defer func() { index++ }()
 		if shouldSkip[index] {
-			return fmt.Sprintf("\033[35m%s\033[39m", gematria.LetterOfRune(r))
+			return string(r)
 		}
 		return f(r)
 	}

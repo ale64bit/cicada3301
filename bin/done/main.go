@@ -3,12 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
-	"strings"
 
 	"cicada/cipher"
-	"cicada/cipher/affine"
-	"cicada/cipher/direct"
-	"cicada/cipher/totient"
+	"cicada/cipher/atbash"
+	"cicada/cipher/caesar"
+	"cicada/cipher/cat"
+	"cicada/cipher/fskip"
+	"cicada/cipher/identity"
+	"cicada/cipher/prime"
 	"cicada/cipher/vigenere"
 	"cicada/data"
 	"cicada/dict"
@@ -22,18 +24,17 @@ func main() {
 		selected[s] = true
 	}
 
-	m := gematria.Len()
 	entries := []struct {
 		section data.Section
 		cipher  cipher.Cipher
 	}{
-		/*  0 */ {data.Warning, affine.New(m-1, m-1)},
-		/*  1 */ {data.Welcome, vigenere.New([]string{gematria.Encode("DIUINITY")}, []int{48, 74, 84, 132, 159, 160, 250, 421, 443, 465, 514})},
-		/*  2 */ {data.SomeWisdom, direct.New()},
-		/*  3 */ {data.Koan1, affine.New(m-1, 2)},
-		/*  4 */ {data.LossOfDivinity, direct.New()},
-		/*  5 */ {data.Koan2, vigenere.New([]string{gematria.Encode("FIRFUMFERENFE")}, []int{49, 58})},
-		/*  6 */ {data.AnInstruction, direct.New()},
+		/*  0 */ {data.Warning, atbash.New()},
+		/*  1 */ {data.Welcome, cat.New(vigenere.New([]string{gematria.Encode("DIUINITY")}), fskip.New(48, 74, 84, 132, 159, 160, 250, 421, 443, 465, 514))},
+		/*  2 */ {data.SomeWisdom, identity.New()},
+		/*  3 */ {data.Koan1, cat.New(atbash.New(), caesar.New(3))},
+		/*  4 */ {data.LossOfDivinity, identity.New()},
+		/*  5 */ {data.Koan2, cat.New(vigenere.New([]string{gematria.Encode("FIRFUMFERENFE")}), fskip.New(49, 58))},
+		/*  6 */ {data.AnInstruction, identity.New()},
 		/*  7 */ // TODO {data.Unsolved0, identity.New()},
 		/*  8 */ // TODO {data.Unsolved1, identity.New()},
 		/*  9 */ // TODO {data.Unsolved2, identity.New()},
@@ -42,20 +43,20 @@ func main() {
 		/* 12 */ // TODO {data.Unsolved5, identity.New()},
 		/* 13 */ // TODO {data.Unsolved6, identity.New()},
 		/* 14 */ // TODO {data.Unsolved7, identity.New()},
-		/* 15 */ {data.AnEnd, totient.New([]int{56})},
-		/* 16 */ {data.Parable, direct.New()},
+		/* 15 */ {data.AnEnd, cat.New(prime.New(), caesar.New(28), fskip.New(56))},
+		/* 16 */ {data.Parable, identity.New()},
 	}
 	for _, e := range entries {
 		if len(selected) == 0 || selected[e.section.ID] {
-			allPages := strings.Join(e.section.Pages, "\n")
-			result := e.cipher.Decode(allPages)
+			cipherText := e.section.Text()
+			plainText := gematria.Decode(e.cipher.Decode(cipherText))
 			fmt.Printf("\033[33m# id=%s len=%d markings=%v score=%.3f method=%s\n\033[39m%s\n\n",
 				e.section.ID,
-				gematria.RuneCount(allPages),
+				gematria.RuneCount(cipherText),
 				e.section.Markings,
-				dict.Score(result),
+				dict.Score(plainText),
 				e.cipher.ID(),
-				result)
+				plainText)
 		}
 	}
 }

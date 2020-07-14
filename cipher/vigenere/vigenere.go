@@ -8,16 +8,15 @@ import (
 )
 
 type vigenere struct {
-	keys  []string
-	skips []int
+	keys []string
 }
 
-func New(keywords []string, skips []int) cipher.Cipher {
-	return &vigenere{keywords, skips}
+func New(keywords []string) cipher.Cipher {
+	return &vigenere{keywords}
 }
 
 func (c *vigenere) ID() string {
-	return fmt.Sprintf("vigenere(keys=%v, skips=%v)", c.keys, c.skips)
+	return fmt.Sprintf("vigenere(keys=%v)", c.keys)
 }
 
 func (c *vigenere) Encode(string) string {
@@ -39,7 +38,7 @@ func (c *vigenere) Decode(s string) string {
 			}
 			x %= m
 		}
-		return gematria.LetterOfIndex(x)
+		return string(gematria.RuneOfIndex(x))
 	}
-	return cipher.MapRunesWithSkips(s, f, c.skips)
+	return gematria.MapRunes(s, f)
 }
